@@ -57,7 +57,7 @@ When asked to add a new mode like T6MM, use the registry rather than scattered c
 scripts/xbet-business-features.js
 ```
 
-Each feature should define aliases, scanner defaults, market eligibility, settlement/in-play gates, safety defaults, ultra-safe rules, table variant, and scoring profile. If only the one-file runtime exists, first run:
+Each feature should define aliases, scanner defaults, coupon defaults, market eligibility, settlement/in-play gates, safety defaults, ultra-safe rules, table variant, and scoring profile. T6MM/Lucky Friday coupon mode requires exactly 3 legs; one returned row is only a candidate, not a complete T6MM coupon. If only the one-file runtime exists, first run:
 
 ```bash
 node skills/xbet-odds-analyst/scripts/xbet-odds-onefile.js unpack /tmp/xbet-src
@@ -145,6 +145,8 @@ When the user asks to generate a coupon/slip, infer:
 - `minLegs` / `maxLegs`, if stated.
 - `legOddsBand`, default 1.01..1.30 for "sieu hen".
 - profile: `coupon-stable`, `buffer-handicap`, or `mixed`.
+
+For T6MM/Lucky Friday coupons, force exactly 3 legs. Do not use the generic target-rate leg-count heuristic to produce 2 or 4+ T6MM legs. If the user asks for one "rate", label it as a single candidate only.
 
 If target rate is given but leg count is not, estimate count with `ceil(log(targetRate) / log(medianCandidateOdds))` and test nearby counts. Prefer the fewest legs that reaches or comes close to target without adding weak candidates.
 

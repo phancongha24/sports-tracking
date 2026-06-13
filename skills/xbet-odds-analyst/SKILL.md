@@ -77,6 +77,7 @@ Each feature owns:
 
 - `aliases`: user-facing names and CLI aliases.
 - `defaults`: odds band, scanner mode, hours, subgame behavior, and event count.
+- `couponDefaults`: fixed coupon shape such as exact leg count.
 - `marketPattern` / `excludedMarketPattern`: eligibility rules.
 - `usesSettlementGate` and `requiresInplay`: flow gates.
 - `safetyDefaults` and `ultraSafeRules`: conservative/ultra-safe defaults.
@@ -107,6 +108,10 @@ Inputs to infer or ask for if missing:
 - `couponProfile`: `coupon-stable`, `buffer-handicap`, or `mixed`.
 - `timeWindow`: default current time through 16 hours ahead unless the user gives a tighter window.
 
+Feature-specific leg rules:
+
+- T6MM / Lucky Friday coupon mode requires exactly 3 legs. If the user asks for one "rate", return one candidate and explicitly say it is not a complete T6MM coupon. If the user asks for a T6MM coupon/code/slip, build exactly 3 eligible legs unless they explicitly say they are only debugging a non-promo payload.
+
 Leg count heuristic:
 
 - Sort usable legs by risk-adjusted quality first, not by odds.
@@ -114,6 +119,7 @@ Leg count heuristic:
 - Then build candidate coupons for nearby counts, e.g. `n-1`, `n`, `n+1`, because combined rate and leg quality trade off.
 - Prefer the coupon with the fewest legs that reaches or is close to the target while preserving leg quality.
 - If the only way to reach the target requires too many weak legs, say so and return a safer lower-rate coupon plus the riskier target-reaching option.
+- Do not override an exact feature leg rule. For T6MM, the heuristic can select which 3 legs, but not 2 or 4+ legs.
 
 Coupon profile rules:
 
@@ -490,6 +496,7 @@ Prefer:
 T6MM defaults:
 
 - Odds default to `1.40..1.70` unless the user states another range.
+- Coupon/slip mode requires exactly 3 legs. A single listed rate is only a candidate, not a complete T6MM coupon.
 - Use a broad scan by default. Do not force `hours=2` or `settleWithinMinutes=120` unless the user asks for a relative from-now settlement window.
 - When the user gives a promo cutoff/end time such as `09:33`, use `--settle-before 09:33` or API `settleBefore=09:33`. This keeps the broad scan but removes long-duration events whose estimated finish exceeds the cutoff.
 - For the server API, use `promoMode=t6mm`; it defaults to broad `hours=16` plus corners/yellow-card/offsides subgame scanning, with no settlement gate unless `settleBefore`, `settleWithinMinutes`, or `maxStartMinutes` is provided.

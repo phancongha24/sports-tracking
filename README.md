@@ -62,7 +62,7 @@ node scripts/xbet-odds-onefile.js analyze --help
 Business features are the reusable rule layer above raw odds scanning. Existing features include:
 
 - `general`: normal shortlist mode.
-- `lucky-friday` / `t6mm`: T6MM rules, settlement gate, winner/double-chance eligibility, and corners/cards/offsides winner-style support.
+- `lucky-friday` / `t6mm`: T6MM rules, exactly 3-leg coupon shape, settlement gate, winner/double-chance eligibility, and corners/cards/offsides winner-style support.
 - `handicap-total`: handicap/total research mode.
 - `live-lock`: in-play nearly-decided market mode.
 
@@ -90,6 +90,7 @@ Add a new feature by adding one entry to `BUSINESS_FEATURES` with:
 
 - `id`, `label`, and `aliases`
 - `defaults` for odds range, scan mode, subgames, hours, and event count
+- `couponDefaults` for fixed coupon shape, such as exact leg count
 - `marketPattern` and optional `excludedMarketPattern`
 - `usesSettlementGate` / `requiresInplay` when needed
 - `safetyDefaults` and `ultraSafeRules`

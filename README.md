@@ -11,6 +11,7 @@ This package is for QA, public odds-feed analysis, market integrity checks, and 
 - `skills/xbet-odds-analyst/references/failed-coupon-lessons.md`: QA lessons and avoid rules.
 - `skills/xbet-odds-analyst/exports/chatgpt.md`: prompt export for ChatGPT projects.
 - `skills/xbet-odds-analyst/exports/claude-code.md`: prompt export for Claude Code.
+- `tools/build-xbet-onefile.js`: rebuilds the one-file runtime from an unpacked or local split-source tree.
 
 The split local source files (`server.js`, `scripts/xbet-odds-filter.js`, `scripts/xbet-pick-analyzer.js`) are intentionally not required by the installable package. Use the bundled one-file runtime.
 
@@ -55,6 +56,44 @@ node scripts/xbet-odds-onefile.js server
 node scripts/xbet-odds-onefile.js odds --help
 node scripts/xbet-odds-onefile.js analyze --help
 ```
+
+## Business Feature Framework
+
+Business features are the reusable rule layer above raw odds scanning. Existing features include:
+
+- `general`: normal shortlist mode.
+- `lucky-friday` / `t6mm`: T6MM rules, settlement gate, winner/double-chance eligibility, and corners/cards/offsides winner-style support.
+- `handicap-total`: handicap/total research mode.
+- `live-lock`: in-play nearly-decided market mode.
+
+The extension point is:
+
+```text
+scripts/xbet-business-features.js
+```
+
+Because the package ships a single runtime file, develop new features with this flow:
+
+```bash
+node skills/xbet-odds-analyst/scripts/xbet-odds-onefile.js unpack /tmp/xbet-src
+# edit /tmp/xbet-src/scripts/xbet-business-features.js
+node tools/build-xbet-onefile.js /tmp/xbet-src skills/xbet-odds-analyst/scripts/xbet-odds-onefile.js
+```
+
+To develop from this local workspace instead of an unpacked source tree:
+
+```bash
+node tools/build-xbet-onefile.js . skills/xbet-odds-analyst/scripts/xbet-odds-onefile.js
+```
+
+Add a new feature by adding one entry to `BUSINESS_FEATURES` with:
+
+- `id`, `label`, and `aliases`
+- `defaults` for odds range, scan mode, subgames, hours, and event count
+- `marketPattern` and optional `excludedMarketPattern`
+- `usesSettlementGate` / `requiresInplay` when needed
+- `safetyDefaults` and `ultraSafeRules`
+- `tableVariant` and `scoringProfile`
 
 ## ChatGPT / Claude Prompt Exports
 

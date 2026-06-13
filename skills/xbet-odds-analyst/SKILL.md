@@ -56,6 +56,45 @@ If those split files are not present, stay inside the installed skill directory 
 9. If creating a coupon debug code, verify the returned coupon contains all requested legs and `HasRemoveEvents=false`; otherwise mark it unusable and replace the failed leg.
 10. Treat event existence, official fixture presence, and low odds as input validation only. They do not prove edge, safety, or relative team/player strength.
 
+## Business Feature Framework
+
+Business features are the common rule layer for product modes such as T6MM, live-lock, or handicap/total research. Do not add new product modes by scattering `if promoMode === ...` checks through the analyzer. Add or edit the feature registry instead.
+
+Registry source after unpacking or in the local split-source workspace:
+
+```bash
+scripts/xbet-business-features.js
+```
+
+Current feature ids:
+
+- `general`
+- `lucky-friday` / `t6mm`
+- `handicap-total`
+- `live-lock`
+
+Each feature owns:
+
+- `aliases`: user-facing names and CLI aliases.
+- `defaults`: odds band, scanner mode, hours, subgame behavior, and event count.
+- `marketPattern` / `excludedMarketPattern`: eligibility rules.
+- `usesSettlementGate` and `requiresInplay`: flow gates.
+- `safetyDefaults` and `ultraSafeRules`: conservative/ultra-safe defaults.
+- `tableVariant` and `scoringProfile`: output/scoring behavior.
+
+When adding a new business feature:
+
+1. Unpack the runtime if split sources are absent:
+   ```bash
+   node scripts/xbet-odds-onefile.js unpack /tmp/xbet-src
+   ```
+2. Add one `BUSINESS_FEATURES` entry in `scripts/xbet-business-features.js`.
+3. Rebuild the one-file runtime:
+   ```bash
+   node tools/build-xbet-onefile.js /tmp/xbet-src skills/xbet-odds-analyst/scripts/xbet-odds-onefile.js
+   ```
+4. Verify with `node scripts/xbet-odds-onefile.js analyze --promo-mode <new-id> --help` and one narrow smoke scan.
+
 ## Coupon Generation Mode
 
 Use this mode whenever the user asks to `gen coupon`, `tao coupon`, `tao slip`, `gom nhieu leg`, `target rate`, or asks how many safe legs are needed for a desired combined rate.

@@ -47,6 +47,23 @@ server.js
 7. Verify final shortlist evidence with official/primary sources when the user asks for motivation or final picks.
 8. If producing coupon debug codes, verify full leg retention before reporting a code.
 
+## Business Feature Framework
+
+Business features are product modes above the scanner. Existing feature ids are `general`, `lucky-friday`/`t6mm`, `handicap-total`, and `live-lock`.
+
+When asked to add a new mode like T6MM, use the registry rather than scattered conditionals:
+
+```text
+scripts/xbet-business-features.js
+```
+
+Each feature should define aliases, scanner defaults, market eligibility, settlement/in-play gates, safety defaults, ultra-safe rules, table variant, and scoring profile. If only the one-file runtime exists, first run:
+
+```bash
+node skills/xbet-odds-analyst/scripts/xbet-odds-onefile.js unpack /tmp/xbet-src
+node tools/build-xbet-onefile.js /tmp/xbet-src skills/xbet-odds-analyst/scripts/xbet-odds-onefile.js
+```
+
 ## Ultra-Safe All-Category Flow
 
 When the user asks for "ultra-safe", "an chac", "sure-ish", or every category:

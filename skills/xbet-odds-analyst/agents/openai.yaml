@@ -1,4 +1,4 @@
 interface:
   display_name: "XBet Odds QA Analyst"
   short_description: "Analyze public odds data for QA and market integrity"
-  default_prompt: "Use $xbet-odds-analyst to crawl all categories, rank markets, generate verified motivation-gated coupon debug artifacts for target rates/leg counts, explain why this exact coupon was selected, include per-leg counter-risk and coupon-level ultra-safe verdict, audit sure-win claims, and keep it QA research, not gambling advice."
+  default_prompt: "Use $xbet-odds-analyst to crawl all categories, rank markets, apply business-feature modes such as T6MM/live-lock/handicap-total through the registry, generate verified motivation-gated coupon debug artifacts for target rates/leg counts, explain why this exact coupon was selected, include per-leg counter-risk and coupon-level ultra-safe verdict, audit sure-win claims, and keep it QA research, not gambling advice."

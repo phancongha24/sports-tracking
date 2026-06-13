@@ -1,0 +1,13 @@
+.DS_Store
+.data/
+.planning/
+README.local-dev.md
+
+# Local split-source development files are intentionally not part of the
+# installable skill package. The package ships one runtime file under
+# skills/xbet-odds-analyst/scripts/xbet-odds-onefile.js.
+/app.js
+/index.html
+/server.js
+/styles.css
+/scripts/

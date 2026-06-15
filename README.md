@@ -10,6 +10,8 @@ This package is for QA, public odds-feed analysis, market integrity checks, and 
 - `skills/xbet-odds-analyst/scripts/xbet-odds-onefile.js`: one-file runtime containing the local server, odds scanner, analyzer, and coupon debug API.
 - `skills/xbet-odds-analyst/references/failed-coupon-lessons.md`: QA lessons and avoid rules.
 - `skills/xbet-odds-analyst/exports/chatgpt.md`: prompt export for ChatGPT projects.
+- `skills/xbet-odds-analyst/exports/chatgpt-actions.openapi.yaml`: OpenAPI schema for ChatGPT Custom GPT Actions.
+- `skills/xbet-odds-analyst/exports/chatgpt-actions.md`: setup guide for ChatGPT Actions, HTTPS tunnel, and intent routing.
 - `skills/xbet-odds-analyst/exports/claude-code.md`: prompt export for Claude Code.
 - `tools/build-xbet-onefile.js`: rebuilds the one-file runtime from an unpacked or local split-source tree.
 
@@ -102,8 +104,27 @@ Use these files when a platform does not support local skill folders directly:
 
 ```text
 skills/xbet-odds-analyst/exports/chatgpt.md
+skills/xbet-odds-analyst/exports/chatgpt-actions.md
+skills/xbet-odds-analyst/exports/chatgpt-actions.openapi.yaml
 skills/xbet-odds-analyst/exports/claude-code.md
 ```
+
+For ChatGPT Custom GPT Actions:
+
+1. Run the local server:
+   ```bash
+   node skills/xbet-odds-analyst/scripts/xbet-odds-onefile.js server
+   ```
+2. Expose it through an HTTPS tunnel or deployed wrapper.
+3. Replace `https://YOUR_PUBLIC_BASE_URL` in `chatgpt-actions.openapi.yaml`.
+4. Import the updated schema into `Custom GPT -> Actions`.
+
+The action schema maps common intents to endpoints:
+
+- `t6mm` / `Lucky Friday` -> `GET /api/xbet/odds?promoMode=t6mm...`
+- `live-lock` / in-play nearly-decided scans -> `GET /api/xbet/odds?promoMode=live-lock...`
+- `payload` / mapping debug -> `POST /api/xbet/coupon-draft`
+- `coupon` / `mã` -> `POST /api/xbet/coupon?verify=1&cookieMode=auto`
 
 ## Safety Boundary
 

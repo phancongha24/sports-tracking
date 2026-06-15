@@ -1,0 +1,671 @@
+openapi: 3.1.0
+info:
+  title: XBet Odds Analyst Actions
+  version: 1.0.0
+  description: >
+    Actions contract for the local sports-tracking odds QA server. These
+    endpoints scan public odds data, build SaveCoupon-compatible debug payloads,
+    and verify public coupon retention. They do not log in, submit bets, operate
+    an account, deposit, withdraw, or handle money.
+servers:
+  - url: https://YOUR_PUBLIC_BASE_URL
+    description: Replace with the HTTPS tunnel or deployed wrapper that forwards to the local server.
+tags:
+  - name: xbet
+    description: Public odds QA and coupon-debug endpoints.
+paths:
+  /api/xbet/status:
+    get:
+      operationId: getXbetActionStatus
+      tags: [xbet]
+      summary: Check xBet QA server status and supported business features.
+      description: >
+        Use this before the first scan in a new ChatGPT session to discover
+        available modes, aliases, and endpoint capabilities.
+      x-openai-isConsequential: false
+      responses:
+        "200":
+          description: Server status and feature registry summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/xbet/odds:
+    get:
+      operationId: scanXbetOdds
+      tags: [xbet]
+      summary: Scan public odds candidates.
+      description: >
+        Call this when the user asks to list odds, scan all sports, find T6MM
+        candidates, inspect live-lock rows, filter by sport/category, or produce
+        a shortlist before coupon generation. For "t6mm", set promoMode=t6mm,
+        sports=all, mode=all, and includeSubgames=true unless the user narrows
+        scope. For "live-lock", set promoMode=live-lock and eventStatus=inplay.
+      x-openai-isConsequential: false
+      parameters:
+        - $ref: "#/components/parameters/promoMode"
+        - $ref: "#/components/parameters/mode"
+        - $ref: "#/components/parameters/profile"
+        - $ref: "#/components/parameters/sports"
+        - $ref: "#/components/parameters/markets"
+        - $ref: "#/components/parameters/minOdds"
+        - $ref: "#/components/parameters/maxOdds"
+        - $ref: "#/components/parameters/date"
+        - $ref: "#/components/parameters/startTime"
+        - $ref: "#/components/parameters/endTime"
+        - $ref: "#/components/parameters/from"
+        - $ref: "#/components/parameters/to"
+        - $ref: "#/components/parameters/hours"
+        - $ref: "#/components/parameters/eventStatus"
+        - $ref: "#/components/parameters/includeStarted"
+        - $ref: "#/components/parameters/startedMinutes"
+        - $ref: "#/components/parameters/maxStartMinutes"
+        - $ref: "#/components/parameters/settleWithinMinutes"
+        - $ref: "#/components/parameters/settleBefore"
+        - $ref: "#/components/parameters/liveFeed"
+        - $ref: "#/components/parameters/liveFetchCount"
+        - $ref: "#/components/parameters/includeSubgames"
+        - $ref: "#/components/parameters/subgameTags"
+        - $ref: "#/components/parameters/subgameLimit"
+        - $ref: "#/components/parameters/champRegex"
+        - $ref: "#/components/parameters/count"
+        - $ref: "#/components/parameters/clean"
+        - $ref: "#/components/parameters/minCleanScore"
+      responses:
+        "200":
+          description: Odds scan result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OddsScanResult"
+        "400":
+          $ref: "#/components/responses/Error"
+        "502":
+          $ref: "#/components/responses/Error"
+
+  /api/xbet/coupon-draft:
+    post:
+      operationId: buildXbetCouponDraft
+      tags: [xbet]
+      summary: Build a local SaveCoupon payload without saving it remotely.
+      description: >
+        Use this when the user asks to inspect payload shape, debug mapping, or
+        prepare a coupon draft before generating a public coupon code. This
+        endpoint does not call SaveCoupon.
+      x-openai-isConsequential: false
+      parameters:
+        - $ref: "#/components/parameters/summ"
+        - $ref: "#/components/parameters/antiExpressCoef"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/PicksBody"
+                - $ref: "#/components/schemas/SaveCouponPayloadBody"
+      responses:
+        "200":
+          description: Local coupon draft.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  slip:
+                    type:
+                      - object
+                      - "null"
+                    additionalProperties: true
+                  couponDraft:
+                    $ref: "#/components/schemas/CouponDraft"
+                  note:
+                    type: string
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/Error"
+        "502":
+          $ref: "#/components/responses/Error"
+
+  /api/xbet/coupon:
+    post:
+      operationId: createVerifiedXbetCoupon
+      tags: [xbet]
+      summary: Save and optionally verify a public coupon debug code.
+      description: >
+        Call this only after selecting candidate legs and building a
+        SaveCoupon-compatible payload. Use verify=1 and cookieMode=auto by
+        default. This creates a public SaveCoupon debug artifact only; it does
+        not log in, submit a bet, operate an account, or handle money.
+      x-openai-isConsequential: true
+      parameters:
+        - $ref: "#/components/parameters/verify"
+        - $ref: "#/components/parameters/cookieMode"
+        - $ref: "#/components/parameters/summ"
+        - $ref: "#/components/parameters/antiExpressCoef"
+        - $ref: "#/components/parameters/codeOnly"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/SaveCouponPayloadBody"
+                - $ref: "#/components/schemas/PicksBody"
+      responses:
+        "200":
+          description: Coupon save and verification result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CouponResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "502":
+          $ref: "#/components/responses/Error"
+
+components:
+  parameters:
+    promoMode:
+      name: promoMode
+      in: query
+      description: Business feature mode. Use t6mm for Lucky Friday/T6MM, live-lock for nearly decided in-play rows, handicap-total for handicap/total research.
+      schema:
+        type: string
+        enum: [general, t6mm, lucky-friday, handicap-total, live-lock]
+        default: general
+    mode:
+      name: mode
+      in: query
+      description: Odds scanner market mode.
+      schema:
+        type: string
+        enum: [all, lucky-friday, handicap-total]
+        default: all
+    profile:
+      name: profile
+      in: query
+      description: Feed quality profile.
+      schema:
+        type: string
+        enum: [balanced, legit, raw]
+        default: balanced
+    sports:
+      name: sports
+      in: query
+      description: Comma-separated sport names or all.
+      schema:
+        type: string
+        default: all
+        examples: [all, Football, "Football,Esports,Tennis"]
+    markets:
+      name: markets
+      in: query
+      description: Market filter override. Use all for raw market exploration.
+      schema:
+        type: string
+        default: all
+    minOdds:
+      name: min
+      in: query
+      description: Minimum decimal odds.
+      schema:
+        type: number
+        format: double
+        default: 1.01
+    maxOdds:
+      name: max
+      in: query
+      description: Maximum decimal odds.
+      schema:
+        type: number
+        format: double
+        default: 1.7
+    date:
+      name: date
+      in: query
+      description: Vietnam calendar date in YYYY-MM-DD format.
+      schema:
+        type: string
+        pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+    startTime:
+      name: startTime
+      in: query
+      description: Vietnam start time for date scans, HH:mm.
+      schema:
+        type: string
+        pattern: "^\\d{2}:\\d{2}$"
+    endTime:
+      name: endTime
+      in: query
+      description: Vietnam end time for date scans, HH:mm. Values <= start roll to the next day.
+      schema:
+        type: string
+        pattern: "^\\d{2}:\\d{2}$"
+    from:
+      name: from
+      in: query
+      description: Exact Vietnam start datetime, e.g. 2026-06-15T18:00.
+      schema:
+        type: string
+    to:
+      name: to
+      in: query
+      description: Exact Vietnam end datetime, e.g. 2026-06-15T21:00.
+      schema:
+        type: string
+    hours:
+      name: hours
+      in: query
+      description: Look-ahead window in hours when from/to are not provided.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 48
+        default: 16
+    eventStatus:
+      name: eventStatus
+      in: query
+      description: Event timing filter.
+      schema:
+        type: string
+        enum: [window, upcoming, inplay, both]
+        default: upcoming
+    includeStarted:
+      name: includeStarted
+      in: query
+      description: Include events that recently started.
+      schema:
+        type: boolean
+        default: false
+    startedMinutes:
+      name: startedMinutes
+      in: query
+      description: Backfill started events up to this many minutes.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 720
+        default: 180
+    maxStartMinutes:
+      name: maxStartMinutes
+      in: query
+      description: Exclude events starting after this many minutes from now.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 1440
+    settleWithinMinutes:
+      name: settleWithinMinutes
+      in: query
+      description: T6MM settlement gate in minutes from now.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 1440
+    settleBefore:
+      name: settleBefore
+      in: query
+      description: T6MM settlement gate as Vietnam HH:mm cutoff.
+      schema:
+        type: string
+        pattern: "^\\d{2}:\\d{2}$"
+    liveFeed:
+      name: liveFeed
+      in: query
+      description: Use realtime line-feed source.
+      schema:
+        type: boolean
+        default: true
+    liveFetchCount:
+      name: liveFetchCount
+      in: query
+      description: Upstream live games to fetch per sport.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 2000
+    includeSubgames:
+      name: includeSubgames
+      in: query
+      description: Follow football stat submarkets such as corners, yellow cards, and offsides.
+      schema:
+        type: boolean
+        default: false
+    subgameTags:
+      name: subgameTags
+      in: query
+      description: Comma-separated subgame tags. Use all only for exhaustive mapping QA.
+      schema:
+        type: string
+        default: corners,yellow-cards,offsides
+    subgameLimit:
+      name: subgameLimit
+      in: query
+      description: Maximum subgames per event. Use 0 for no cap.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 100
+        default: 12
+    champRegex:
+      name: champRegex
+      in: query
+      description: Keep only championships/leagues matching this regex.
+      schema:
+        type: string
+    count:
+      name: count
+      in: query
+      description: Maximum candidates returned by the scanner. Alias for limit.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 12000
+        default: 100
+    clean:
+      name: clean
+      in: query
+      description: Enable heuristic clean filtering.
+      schema:
+        type: boolean
+        default: true
+    minCleanScore:
+      name: minCleanScore
+      in: query
+      description: Minimum clean score when clean filtering is enabled.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 100
+        default: 50
+    verify:
+      name: verify
+      in: query
+      description: Verify the saved coupon through GetCoupon and require retained legs.
+      schema:
+        type: boolean
+        default: true
+    cookieMode:
+      name: cookieMode
+      in: query
+      description: Public coupon cookie bootstrap mode. Use auto by default.
+      schema:
+        type: string
+        enum: [auto, none, env]
+        default: auto
+    summ:
+      name: summ
+      in: query
+      description: Debug stake amount included in SaveCoupon payload.
+      schema:
+        type: integer
+        minimum: 0
+        default: 100000
+    antiExpressCoef:
+      name: antiExpressCoef
+      in: query
+      description: AntiExpressCoef value included in SaveCoupon payload.
+      schema:
+        type: number
+        format: double
+        default: 6
+    codeOnly:
+      name: codeOnly
+      in: query
+      description: Return only the coupon code as plain text when true.
+      schema:
+        type: boolean
+        default: false
+
+  responses:
+    Error:
+      description: Error response.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              ok:
+                type: boolean
+              error:
+                type: string
+              note:
+                type: string
+              retryAfterMs:
+                type: integer
+            additionalProperties: true
+
+  schemas:
+    OddsScanResult:
+      type: object
+      properties:
+        snapshot:
+          type: string
+        window:
+          type: object
+          properties:
+            from:
+              type: string
+            to:
+              type: string
+          additionalProperties: true
+        filter:
+          type: object
+          additionalProperties: true
+        scanned:
+          type: object
+          properties:
+            sports:
+              type: integer
+            candidates:
+              type: integer
+          additionalProperties: true
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/OddsCandidate"
+        slip:
+          type:
+            - object
+            - "null"
+          additionalProperties: true
+      additionalProperties: true
+
+    OddsCandidate:
+      type: object
+      properties:
+        sport:
+          type: string
+        league:
+          type: string
+        stage:
+          type: string
+        timeVN:
+          type: string
+        eventStatus:
+          type: string
+        event:
+          type: string
+        market:
+          type: string
+        pick:
+          type: string
+        odds:
+          type: number
+        code:
+          type: string
+        gameId:
+          type: integer
+        cleanScore:
+          type: integer
+        flags:
+          type: array
+          items:
+            type: string
+      additionalProperties: true
+
+    PicksBody:
+      type: object
+      description: Candidate rows selected from /api/xbet/odds or a prior analyzer response.
+      properties:
+        picks:
+          type: array
+          items:
+            $ref: "#/components/schemas/OddsCandidate"
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/OddsCandidate"
+        legs:
+          type: array
+          items:
+            $ref: "#/components/schemas/OddsCandidate"
+      additionalProperties: true
+
+    SaveCouponPayloadBody:
+      type: object
+      properties:
+        saveCouponPayload:
+          $ref: "#/components/schemas/SaveCouponPayload"
+      required: [saveCouponPayload]
+      additionalProperties: true
+
+    SaveCouponPayload:
+      type: object
+      properties:
+        notWait:
+          type: boolean
+          default: true
+        CheckCf:
+          type: integer
+          default: 1
+        partner:
+          type: integer
+          default: 1
+        AntiExpressCoef:
+          type: number
+          default: 6
+        Summ:
+          type: integer
+          default: 100000
+        Events:
+          type: array
+          minItems: 1
+          maxItems: 25
+          items:
+            $ref: "#/components/schemas/SaveCouponEvent"
+        Vid:
+          type: integer
+          default: 0
+      required: [Events]
+      additionalProperties: true
+
+    SaveCouponEvent:
+      type: object
+      properties:
+        GameId:
+          type: integer
+        Type:
+          type: integer
+          description: SaveCoupon Type, e.g. G1T1 -> 1, G8T4 -> 4, G2T7P1.5 -> 7.
+        Coef:
+          type: number
+        Param:
+          type: number
+          default: 0
+        PV:
+          type:
+            - string
+            - number
+            - "null"
+          default: null
+        PlayerId:
+          type: integer
+          default: 0
+        Kind:
+          type: integer
+          default: 3
+        InstrumentId:
+          type: integer
+          default: 0
+        Seconds:
+          type: integer
+          default: 0
+        Price:
+          type: number
+          default: 0
+        Expired:
+          type: integer
+          default: 0
+        PlayersDuel:
+          type: array
+          default: []
+          items: {}
+      required: [GameId, Type, Coef, Kind]
+      additionalProperties: true
+
+    CouponDraft:
+      type: object
+      properties:
+        note:
+          type: string
+        saveCouponPayload:
+          $ref: "#/components/schemas/SaveCouponPayload"
+        skipped:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        copyJson:
+          type: string
+      additionalProperties: true
+
+    CouponResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        saveOk:
+          type: boolean
+        couponCode:
+          type: string
+        couponUsable:
+          type: boolean
+        credentialMode:
+          type: string
+        couponDraft:
+          $ref: "#/components/schemas/CouponDraft"
+        publicCoupon:
+          type: object
+          properties:
+            ok:
+              type: boolean
+            saveOk:
+              type: boolean
+            couponCode:
+              type: string
+            couponUsable:
+              type: boolean
+            verify:
+              type: object
+              properties:
+                attempted:
+                  type: boolean
+                ok:
+                  type: boolean
+                expectedEventCount:
+                  type: integer
+                returnedEventCount:
+                  type: integer
+                hasRemoveEvents:
+                  type: boolean
+              additionalProperties: true
+          additionalProperties: true
+        note:
+          type: string
+      additionalProperties: true

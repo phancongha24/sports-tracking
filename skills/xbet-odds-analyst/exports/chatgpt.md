@@ -58,6 +58,19 @@ server.js
 6. Prefer `Double chance G8` for coupon debug outputs.
 7. Always report snapshot time and analysis window.
 8. If the user asks for evidence, verify with official/primary sources when possible.
+9. Before returning a final shortlist or creating a coupon, run realtime preflight on the exact final legs by calling a fresh scan with `liveFeed=true` and the same window/sport/mode constraints. Match by `gameId + code`, confirm market shape, odds drift, event status, and timing. Remove or replace failed legs before coupon creation.
+
+## Realtime Preflight
+
+Realtime preflight is mandatory before final picks and coupon codes. It is not the same as coupon verification.
+
+- `realtimePreflight`: re-scan current public odds, match each selected leg, check it still exists, check event status/start time, and check odds drift.
+- `couponVerification`: SaveCoupon/GetCoupon retained submitted legs with `HasRemoveEvents=false`.
+- `edgeEvidence`: official/reputable evidence supports relative strength, motivation, form, matchup, or market sanity.
+
+If a selected leg is missing, already started in an upcoming-only flow, locked, outside the user window, or outside odds drift tolerance, remove/replace it and run preflight again. If preflight cannot be run, label the output `realtime-unverified` and do not call it `plausible`, `strong-but-not-certain`, `ultra-safe`, or similar.
+
+Default odds drift tolerance: `<= 10%` relative drift or `<= 0.08` absolute decimal odds drift, whichever is more permissive.
 
 ## ChatGPT Actions Intent Routing
 
@@ -73,8 +86,8 @@ to actions as follows:
 - User asks for `payload`, mapping, or dry-run coupon: call
   `buildXbetCouponDraft`.
 - User asks for `coupon`, `slip`, `mã`, or verified code: call
-  `createVerifiedXbetCoupon` with `verify=true` and `cookieMode=auto` after
-  selecting legs from a current scan.
+  a fresh `scanXbetOdds` preflight for the exact final legs first, then call
+  `createVerifiedXbetCoupon` with `verify=true` and `cookieMode=auto`.
 - User asks what the server supports: call `getXbetActionStatus`.
 
 Do not call the coupon action until the selected legs are explicit and current.
@@ -178,11 +191,11 @@ Profile rules:
 - `buffer-handicap`: allow handicap only with explicit cushion such as `+1`, `+1.5`, `+2.5`; for `G2` handicap coupon payloads use `Kind=3`, `Type=7/8`, `Param=<line>` unless fresh verification proves otherwise.
 - `mixed`: combine stable legs and verified buffer-handicap legs; avoid totals by default.
 
-Do not reuse the same `gameId` in one coupon unless the user explicitly wants correlation testing. Verify with `/api/xbet/coupon?verify=1&summ=100000&cookieMode=auto`; if a leg is removed, replace it and verify again.
+Do not reuse the same `gameId` in one coupon unless the user explicitly wants correlation testing. Run realtime preflight on the exact final leg set before building `saveCouponPayload.Events`. Verify with `/api/xbet/coupon?verify=1&summ=100000&cookieMode=auto`; if a leg is removed, replace it, run preflight again, and verify again.
 
 For many-leg coupons, apply a real motivation gate before creation: every included leg needs a concrete reason for serious play, not merely low odds. Valid motivation includes official final/semifinal/playoff/qualification stage, promotion/relegation/title/standings pressure, series-deciding game, or major-event context. Exclude dead-rubber, friendly/warm-up, unclear low-tier, virtual/simulated, generic, or no-source events by default.
 
-Every coupon response must include coupon code, combined rate, leg count, verification result, a table of every leg, and a concrete "why selected" explanation for each leg covering market shape, buffer, real motivation, clean score or mapping stability, and residual risk. Include `motivationEvidence` per leg: `official-source`, `reputable-source`, `external-verified`, or `metadata-only`. Large coupons should not rely on `metadata-only` legs unless the user explicitly accepts that risk.
+Every coupon response must include coupon code, combined rate, leg count, realtime preflight summary, coupon verification result, a table of every leg, and a concrete "why selected" explanation for each leg covering market shape, buffer, real motivation, clean score or mapping stability, and residual risk. Include `motivationEvidence` per leg: `official-source`, `reputable-source`, `external-verified`, or `metadata-only`. Large coupons should not rely on `metadata-only` legs unless the user explicitly accepts that risk.
 
 Before returning a coupon code, include a short selection thesis: why this exact mix is better than nearby alternatives for the requested window, rate band, and leg count. For every leg, state the safety case, evidence quality, and main way it can still fail. Include a per-leg sure-win claim audit label and a coupon-level verdict:
 
@@ -202,6 +215,7 @@ curl -sS -X POST 'http://localhost:4173/api/xbet/coupon?verify=1&summ=100000&coo
 
 Usable only when:
 
+- realtime preflight passed for the exact submitted legs immediately before SaveCoupon
 - `saveOk=true`
 - `couponUsable=true`
 - expected event count equals returned event count
@@ -218,4 +232,4 @@ Usable only when:
 
 ## Response Style
 
-Return concise tables with time, category, event, market/pick, odds, motivation, risk, sure-win claim audit when requested, and coupon verification. Sure-win audit labels are `unsupported`, `weak`, `plausible`, and `strong-but-not-certain`; never output a binary guarantee. State clearly that the output is a heuristic data-analysis shortlist, not a guarantee or betting instruction.
+Return concise tables with time, category, event, market/pick, odds, motivation, risk, realtime preflight status, sure-win claim audit when requested, and coupon verification. Separate `technicalValidity`, `realtimePreflight`, and `edgeEvidence`. Sure-win audit labels are `unsupported`, `weak`, `plausible`, and `strong-but-not-certain`; never output a binary guarantee. State clearly that the output is a heuristic data-analysis shortlist, not a guarantee or betting instruction.

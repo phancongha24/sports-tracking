@@ -50,11 +50,47 @@ If those split files are not present, stay inside the installed skill directory 
 3. Start broad: all sports/esports first. Apply safety, promotion, and sport filters after scanning unless the user narrowed the scope.
 4. Rank with `scripts/xbet-pick-analyzer.js`; prefer JSON output because it preserves stage, motivation, clean score, and coupon codes.
 5. Prefer clear markets: `Double chance`, then verified `Winner/1X2`; treat `Winner incl OT` as coupon-risky unless single-leg verification or UI payload confirms the SaveCoupon mapping.
-6. For final shortlists, report snapshot time, window, scanned count, confidence/clean/motivation scores, and why lower-ranked rows were excluded.
-7. If the user asks for "sure win", "ăn chắc", "cực safe", or similar, include a `Sure-win claim audit` section for each candidate.
-8. If the user asks for evidence or final recommendations, verify the top candidates with official/primary sources where feasible and cite them.
-9. If creating a coupon debug code, verify the returned coupon contains all requested legs and `HasRemoveEvents=false`; otherwise mark it unusable and replace the failed leg.
-10. Treat event existence, official fixture presence, and low odds as input validation only. They do not prove edge, safety, or relative team/player strength.
+6. Before returning a final shortlist or creating a coupon, run the Realtime Candidate Preflight Gate below against the final candidate set.
+7. For final shortlists, report snapshot time, window, scanned count, realtime preflight timestamp/status, confidence/clean/motivation scores, and why lower-ranked rows were excluded.
+8. If the user asks for "sure win", "ăn chắc", "cực safe", or similar, include a `Sure-win claim audit` section for each candidate.
+9. If the user asks for evidence or final recommendations, verify the top candidates with official/primary sources where feasible and cite them.
+10. If creating a coupon debug code, verify the returned coupon contains all requested legs and `HasRemoveEvents=false`; otherwise mark it unusable and replace the failed leg.
+11. Treat event existence, official fixture presence, low odds, realtime market presence, and coupon retention as input validation only. They do not prove edge, safety, or relative team/player strength.
+
+## Realtime Candidate Preflight Gate
+
+This gate is mandatory before returning any final shortlist, coupon, or "safe" candidate set. It is separate from SaveCoupon/GetCoupon verification.
+
+Run it after ranking and external evidence checks, immediately before coupon payload construction or final answer:
+
+1. Re-fetch the current public odds feed for the final candidate window with `--live-feed` and the same sport/mode/profile constraints used for selection. Use a narrow `--from/--to` window when the user asked for imminent events.
+2. Match every selected leg by `gameId + code` when available. If that fails, match by event name, market, pick, parameter, and start time, then mark the leg `id-rematched`.
+3. Confirm the leg still exists, has the same market shape, same selection side, compatible `Type/Kind/Param`, and an odds value inside the requested band.
+4. Check status and timing:
+   - For upcoming-only requests, remove legs that have started, disappeared, locked, or shifted outside the requested window.
+   - For live/in-play requests, require a fresh live state from the local feed plus an independent live-score/state source when feasible.
+   - For promo/cutoff flows, re-check the settlement gate after the realtime refresh.
+5. Check odds drift against the original selected row:
+   - Default tolerance is `<= 10%` relative drift or `<= 0.08` absolute decimal odds drift, whichever is more permissive.
+   - If odds move outside tolerance, mark `odds-drift`, downgrade the leg, and replace it unless the user explicitly accepts stale/drifting legs.
+   - If odds improve but the market shape is unchanged, keep it only after rechecking counter-risk and source evidence.
+6. For each retained leg, record `realtimePreflight` fields:
+   - `checkedAt`
+   - `status`: `pass`, `pass-with-drift`, `market-refreshed-only`, `id-rematched`, or `fail`
+   - `currentOdds`
+   - `originalOdds`
+   - `eventStatus`
+   - `startTime`
+   - `reason`
+7. If any leg fails, remove or replace it, then run the preflight again on the changed final set.
+8. If a leg cannot be externally live/status verified but still exists in the refreshed odds feed, label it `market-refreshed-only`. Do not classify such a leg above `weak` unless independent evidence already supports relative strength and motivation.
+9. Only after this gate passes should a coupon debug payload be built and sent to SaveCoupon/GetCoupon verification.
+
+Terminology:
+
+- `realtimePreflight` means the selected market was re-read from the live public odds feed and, when feasible, checked against an external current-state source.
+- `couponVerification` means SaveCoupon/GetCoupon retained the submitted events with `HasRemoveEvents=false`.
+- Both can pass while the probabilistic edge remains weak. Do not conflate either with a guaranteed outcome.
 
 ## Business Feature Framework
 
@@ -137,6 +173,7 @@ Coupon construction rules:
 - Prefer motivation that can be externally verified: official tournament/league schedule, final/semifinal/playoff/qualification stage, promotion/relegation/title/standings pressure, series-deciding game, or major-event context.
 - Treat metadata-only motivation as insufficient for large coupons unless the user explicitly accepts that risk. If kept, label it `metadata-only` and do not call the coupon safe.
 - Exclude dead-rubber, friendly/warm-up, unclear low-tier, virtual/simulated, generic, or no-source events from many-leg coupons by default.
+- Run the Realtime Candidate Preflight Gate on the exact final leg set before building `saveCouponPayload.Events`.
 - Verify with `/api/xbet/coupon?verify=1&summ=100000&cookieMode=auto`.
 - If verification removes any leg, identify the removed/suspect leg, replace it, and verify again.
 
@@ -177,11 +214,12 @@ Coupon conviction and explanation gate:
 Every coupon response must include:
 
 - `couponCode`, combined rate, leg count, and verification result.
+- Realtime preflight summary: `checkedAt`, pass/fail count, drift/removal notes, and whether any leg is only `market-refreshed-only`.
 - A table of every leg.
 - A "Why these legs" column or section explaining the concrete reason for inclusion: market shape, buffer amount, real motivation, clean score, mapping stability, and residual risk.
 - A `motivationEvidence` field per leg: `official-source`, `reputable-source`, `external-verified`, or `metadata-only`. Large coupons should not rely on `metadata-only` legs.
 - A coupon-level selection thesis, coupon-level verdict, and per-leg counter-risk so the user can judge whether the "ultra-safe" claim is actually supported.
-- An explicit `technicalValidity` vs `edgeEvidence` distinction. Technical validity means SaveCoupon/GetCoupon retained the legs; edge evidence means the leg has a defensible probability case.
+- An explicit `technicalValidity` vs `realtimePreflight` vs `edgeEvidence` distinction. Technical validity means SaveCoupon/GetCoupon retained the legs; realtime preflight means the market was refreshed and still matched immediately before output; edge evidence means the leg has a defensible probability case.
 - A short note on excluded candidates when relevant, especially rate-too-high, coupon-risky mapping, weak motivation, low-tier/noisy context, or correlation.
 - A non-guarantee note: coupon is a QA/debug artifact and the analysis is not a promise of outcome.
 
@@ -419,6 +457,8 @@ Rules:
 
 Use coupon debug only for local QA of SaveCoupon-compatible payloads.
 
+Before calling this endpoint for a user-facing coupon, the exact leg set must pass the Realtime Candidate Preflight Gate. Coupon debug verification alone only proves payload retention; it does not prove the leg is current, safe, or likely to win.
+
 Endpoint:
 
 ```bash
@@ -434,6 +474,7 @@ Return only:
 - `couponUsable`
 - expected vs returned event count
 - `HasRemoveEvents`
+- realtime preflight summary for the exact submitted legs
 - short event summary
 - why this exact coupon was selected over nearby alternatives
 - why each leg was selected, including evidence quality and counter-risk
@@ -444,6 +485,7 @@ Do not paste the full response unless the user asks for debugging details.
 Verification rule:
 
 - Usable only if `saveOk=true`, `couponUsable=true`, `expectedEventCount == returnedEventCount`, and `HasRemoveEvents=false`.
+- Usable-for-reporting also requires the exact submitted legs to have passed realtime preflight immediately before SaveCoupon. If coupon verification passes but realtime preflight is stale, failed, or missing, return the code only as a technical/debug artifact and label the coupon `realtime-unverified`.
 - If the web UI later removes a leg, mark that market mapping as suspect and replace it with a verified `Double chance G8` leg where possible.
 
 ## Coupon Mapping Notes
@@ -480,7 +522,7 @@ Select the rule-set first:
 - If the user asks for "cực safe", "sure-ish", "sure win", "ăn chắc", "khả năng fail thấp", or similar, add `--ultra-safe` and include a `Sure-win claim audit`.
 - If the user asks to mix every category or says each node should crawl one sport, add `--by-sport --per-sport-limit 20 --sport-concurrency 4`.
 - If the user asks for `ultra-safe`, start with the Ultra-Safe All-Category Workflow: per-category scan around 20 candidates, unify, remove poor value/profitability candidates, then web-verify edge evidence before finalizing.
-- If the user asks for a coupon, use Coupon Generation Mode, treat it as a debug artifact, build `saveCouponPayload.Events`, call `/api/xbet/coupon?verify=1&summ=100000&cookieMode=auto`, report verification status, and explain every leg.
+- If the user asks for a coupon, use Coupon Generation Mode, treat it as a debug artifact, run the Realtime Candidate Preflight Gate on the exact final legs, build `saveCouponPayload.Events`, call `/api/xbet/coupon?verify=1&summ=100000&cookieMode=auto`, report both realtime preflight and coupon verification status, and explain every leg.
 - If the user asks for live nearly-decided picks, live "pretty sure" legs, or already-started games that look locked, use `--promo-mode live-lock` first, then independently verify current score/state before returning or couponing any leg.
 - If the user asks for many-leg coupon safety, require edge evidence per leg before adding it to the coupon; otherwise return fewer legs, `no qualified coupon`, or a clearly labeled forced/debug candidate list.
 - If the user says handicap/total research, use `--promo-mode handicap-total`.
@@ -558,6 +600,8 @@ Use the analyzer's `motivationEvidence` first. For "why clean", "motivation", "e
 
 For generated coupons, especially many-leg coupons, verify motivation for every included leg when feasible. If a leg cannot be externally verified, either exclude it or label it `metadata-only` with a clear residual risk note.
 
+For every final shortlist or coupon, run realtime preflight after evidence collection and immediately before output. This is a current-market/state check, not edge proof. If realtime preflight cannot be run, say so and do not label the result `plausible`, `strong-but-not-certain`, `ultra-safe`, or similar.
+
 Evidence minimums:
 
 - `existence-only`: official/reputable schedule confirms the event but no strength/form/matchup edge is verified. This cannot support `plausible`.
@@ -577,6 +621,7 @@ Use concise tables:
 - Motivation evidence
 - Risk note
 - Sure-win claim audit label when requested
+- Realtime preflight status when returning final picks or coupons
 - Coupon verification if applicable
 
 Close with a short non-gambling disclaimer: the result is a data-analysis shortlist, not a guarantee or instruction to wager.

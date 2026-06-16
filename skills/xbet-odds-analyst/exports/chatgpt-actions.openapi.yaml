@@ -5,8 +5,11 @@ info:
   description: >
     Actions contract for the local sports-tracking odds QA server. These
     endpoints scan public odds data, build SaveCoupon-compatible debug payloads,
-    and verify public coupon retention. They do not log in, submit bets, operate
-    an account, deposit, withdraw, or handle money.
+    and verify public coupon retention. Before creating a user-facing coupon,
+    call the scan endpoint again as realtime preflight for the exact final legs.
+    Coupon retention verification is technical only and is not outcome proof.
+    These endpoints do not log in, submit bets, operate an account, deposit,
+    withdraw, or handle money.
 servers:
   - url: https://YOUR_PUBLIC_BASE_URL
     description: Replace with the HTTPS tunnel or deployed wrapper that forwards to the local server.
@@ -43,6 +46,9 @@ paths:
         a shortlist before coupon generation. For "t6mm", set promoMode=t6mm,
         sports=all, mode=all, and includeSubgames=true unless the user narrows
         scope. For "live-lock", set promoMode=live-lock and eventStatus=inplay.
+        Also call this immediately before createVerifiedXbetCoupon as realtime
+        preflight: match selected legs by gameId+code, confirm market shape,
+        event status/window, and odds drift.
       x-openai-isConsequential: false
       parameters:
         - $ref: "#/components/parameters/promoMode"
@@ -137,7 +143,8 @@ paths:
       tags: [xbet]
       summary: Save and optionally verify a public coupon debug code.
       description: >
-        Call this only after selecting candidate legs and building a
+        Call this only after selecting candidate legs, running realtime
+        preflight through scanXbetOdds for the exact final legs, and building a
         SaveCoupon-compatible payload. Use verify=1 and cookieMode=auto by
         default. This creates a public SaveCoupon debug artifact only; it does
         not log in, submit a bet, operate an account, or handle money.

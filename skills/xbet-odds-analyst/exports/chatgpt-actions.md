@@ -97,8 +97,9 @@ Intent routing:
   call scanXbetOdds with promoMode=live-lock, eventStatus=inplay,
   includeStarted=true, liveFeed=true, and the user's odds range.
 - If the user asks for "tạo coupon", "coupon", "slip", or "mã":
-  first select candidate legs from the latest scan, then call
-  createVerifiedXbetCoupon with verify=true and cookieMode=auto.
+  first select candidate legs, run a fresh scan as realtime preflight for the
+  exact final legs, then call createVerifiedXbetCoupon with verify=true and
+  cookieMode=auto.
 - If the user asks "payload", "debug payload", or "mapping":
   call buildXbetCouponDraft instead of createVerifiedXbetCoupon.
 - If no scan has happened in the current session, call getXbetActionStatus
@@ -112,9 +113,14 @@ Coupon rules:
 - Default PlayersDuel must be [].
 - A coupon is usable only if saveOk=true, couponUsable=true,
   expectedEventCount equals returnedEventCount, and HasRemoveEvents=false.
+- Coupon verification alone is not enough. Immediately before creating a
+  coupon, run realtime preflight with scanXbetOdds: match each leg by
+  gameId+code, confirm market shape/status/window, and reject or replace legs
+  that disappeared, started in an upcoming-only flow, locked, or drifted beyond
+  tolerance.
 
 Analysis rules:
-- Separate technicalValidity from edgeEvidence.
+- Separate technicalValidity, realtimePreflight, and edgeEvidence.
 - Never call a candidate guaranteed or a sure win.
 - Use labels: unsupported, weak, plausible, strong-but-not-certain.
 - Explain why each selected leg was chosen and the main counter-risk.
@@ -178,9 +184,10 @@ When ChatGPT returns a coupon, it should include:
 - `couponCode`
 - combined rate
 - leg count
+- realtime preflight summary
 - verification result
 - per-leg reason and counter-risk
-- `technicalValidity` vs `edgeEvidence`
+- `technicalValidity` vs `realtimePreflight` vs `edgeEvidence`
 - coupon-level verdict
 
 The response should explicitly state that this is a QA/debug artifact and not a
